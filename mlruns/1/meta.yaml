@@ -1,0 +1,4 @@
+artifact_location: file:///srv/project/APW/Ayantika_codebase/mlruns/1
+experiment_id: '1'
+lifecycle_stage: active
+name: latent_with_decoder_output_constrained

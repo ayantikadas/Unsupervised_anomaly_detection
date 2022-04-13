@@ -1,0 +1,15 @@
+artifact_uri: file:///srv/project/APW/Ayantika_codebase/mlruns/2/e1640c4660d943ce9c3dbaaf244245b0/artifacts
+end_time: 1642603429326
+entry_point_name: ''
+experiment_id: '2'
+lifecycle_stage: active
+name: ''
+run_id: e1640c4660d943ce9c3dbaaf244245b0
+run_uuid: e1640c4660d943ce9c3dbaaf244245b0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1642603046643
+status: 3
+tags: []
+user_id: ayantika
