@@ -4,6 +4,7 @@ import glob
 import torch
 import numpy as np
 import time
+
 import torch.nn as nn
 import torchio as tio
 from torchviz import make_dot
@@ -18,15 +19,6 @@ from scipy.ndimage import gaussian_filter
 
 # Abridged version of https://towardsdatascience.com/u-net-b229b32b4a71
 
-import torch.nn as nn
-########################################### Auto encoder 1 ########################################
-def reparametrize(self, mu, logvar):
-    std = logvar.mul(0.5).exp_()
-    eps = std.data.new(std.size()).normal_()
-    return eps.mul(std).add_(mu)
-
-
-########################################### Auto encoder 1 ########################################
 class custom_AE0(nn.Module):
     def contracting_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
@@ -50,12 +42,6 @@ class custom_AE0(nn.Module):
                     # torch.nn.LeakyReLU(),
                 )
         return block
-    def bottleneck_block_2(self,in_channels, out_channels):
-        block = torch.nn.Sequential(
-                    torch.nn.Conv2d(kernel_size=1, in_channels=in_channels, out_channels=out_channels,stride = 2,padding = 0),
-                    # torch.nn.LeakyReLU(),
-                )
-        return block
     
     def post_bottleneck_block(self,in_channels, out_channels):
         block = torch.nn.Sequential(
@@ -63,7 +49,6 @@ class custom_AE0(nn.Module):
                     torch.nn.LeakyReLU(),
                 )
         return block
-    
     
     def final_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
@@ -83,10 +68,8 @@ class custom_AE0(nn.Module):
         self.conv_encode4 = self.contracting_block(128,128,5)
         # Bottleneck
         self.bottleneck_layer = self.bottleneck_block(128,16)
-        self.bottleneck_layer_2 = self.bottleneck_block_2(16,16)
         # Decode
         self.post_bottleneck_layer = self.post_bottleneck_block(16,128)
-        self.conv_decode4 = self.expansive_block(128,128,5)
         self.conv_decode3 = self.expansive_block(128,128,5)
         self.conv_decode2 = self.expansive_block(128,64,5)
         self.conv_decode1 = self.expansive_block(64,32,5)
@@ -97,21 +80,19 @@ class custom_AE0(nn.Module):
         encode_block1 = self.conv_encode1(x)
         encode_block2 = self.conv_encode2(encode_block1)
         encode_block3 = self.conv_encode3(encode_block2)
-        encode_block4 = self.conv_encode4(encode_block3)        
+        encode_block4 = self.conv_encode4(encode_block3)
         # Bottleneck
         bt = self.bottleneck_layer(encode_block4)
-        bt_2 = self.bottleneck_layer_2(bt)
         # Decode
-        cat_layer5 = self.post_bottleneck_layer(bt_2)
-        cat_layer4 = self.conv_decode4(cat_layer5)
+        cat_layer4 = self.post_bottleneck_layer(bt)
         cat_layer3 = self.conv_decode3(cat_layer4)
         cat_layer2 = self.conv_decode2(cat_layer3)
         cat_layer1 = self.conv_decode1(cat_layer2)
         final_layer = self.final_layer(cat_layer1)
-        return final_layer,bt_2
+        return final_layer,bt
+    
+# Abridged version of https://towardsdatascience.com/u-net-b229b32b4a71
 
-
-########################################### Auto encoder 2 ########################################   
 class custom_AE1(nn.Module):
     def contracting_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
@@ -182,9 +163,9 @@ class custom_AE1(nn.Module):
         cat_layer2 = self.conv_decode2(cat_layer3)
         cat_layer1 = self.conv_decode1(cat_layer2)
         final_layer = self.final_layer(cat_layer1)
-        return final_layer,bt
-    
-########################################### Auto encoder 3 ########################################
+        return final_layer
+# Abridged version of https://towardsdatascience.com/u-net-b229b32b4a71
+
 class custom_AE2(nn.Module):
     def contracting_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
@@ -231,12 +212,12 @@ class custom_AE2(nn.Module):
         self.conv_encode1 = self.contracting_block(in_channels=in_channel, out_channels=32,kernel_size = 5)
         self.conv_encode2 = self.contracting_block(32,64,5)
         self.conv_encode3 = self.contracting_block(64,128,5)
-#         self.conv_encode4 = self.contracting_block(128,128,5)
+        self.conv_encode4 = self.contracting_block(128,128,5)
         # Bottleneck
         self.bottleneck_layer = self.bottleneck_block(128,16)
         # Decode
         self.post_bottleneck_layer = self.post_bottleneck_block(16,128)
-#         self.conv_decode3 = self.expansive_block(128,128,5)
+        self.conv_decode3 = self.expansive_block(128,128,5)
         self.conv_decode2 = self.expansive_block(128,64,5)
         self.conv_decode1 = self.expansive_block(64,32,5)
         self.final_layer = self.final_block(32, out_channel,5)
@@ -246,18 +227,16 @@ class custom_AE2(nn.Module):
         encode_block1 = self.conv_encode1(x)
         encode_block2 = self.conv_encode2(encode_block1)
         encode_block3 = self.conv_encode3(encode_block2)
-#         encode_block4 = self.conv_encode4(encode_block3)
+        encode_block4 = self.conv_encode4(encode_block3)
         # Bottleneck
-        bt = self.bottleneck_layer(encode_block3)
+        bt = self.bottleneck_layer(encode_block4)
         # Decode
         cat_layer4 = self.post_bottleneck_layer(bt)
-#         cat_layer3 = self.conv_decode3(cat_layer4)
-        cat_layer2 = self.conv_decode2(cat_layer4)
+        cat_layer3 = self.conv_decode3(cat_layer4)
+        cat_layer2 = self.conv_decode2(cat_layer3)
         cat_layer1 = self.conv_decode1(cat_layer2)
         final_layer = self.final_layer(cat_layer1)
-        return final_layer,bt
-    
-
+        return final_layer
     
 # From https://discuss.pytorch.org/t/is-there-anyway-to-do-gaussian-filtering-for-an-image-2d-3d-in-pytorch/12351/3
 def get_gaussian_kernel(kernel_size = 5,sigma = 1.0,channels = 1):

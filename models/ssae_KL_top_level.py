@@ -19,15 +19,21 @@ from scipy.ndimage import gaussian_filter
 # Abridged version of https://towardsdatascience.com/u-net-b229b32b4a71
 
 import torch.nn as nn
-########################################### Auto encoder 1 ########################################
-def reparametrize(self, mu, logvar):
-    std = logvar.mul(0.5).exp_()
-    eps = std.data.new(std.size()).normal_()
-    return eps.mul(std).add_(mu)
 
 
-########################################### Auto encoder 1 ########################################
-class custom_AE0(nn.Module):
+# ########################################### Auto encoder 1 ########################################
+# def reparametrize(self, mu, logvar):
+#     std = logvar.mul(0.5).exp_()
+#     eps = std.data.new(std.size()).normal_()
+#     return eps.mul(std).add_(mu)
+
+########################################### Auto encoder 2 ########################################   
+class custom_AE_KL(nn.Module):
+    def reparametrize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        eps = std.data.new(std.size()).normal_()
+        return eps.mul(std).add_(mu)
+
     def contracting_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
                     torch.nn.Conv2d(kernel_size=kernel_size, in_channels=in_channels, out_channels=out_channels,stride = 2,padding = 2),
@@ -50,12 +56,6 @@ class custom_AE0(nn.Module):
                     # torch.nn.LeakyReLU(),
                 )
         return block
-    def bottleneck_block_2(self,in_channels, out_channels):
-        block = torch.nn.Sequential(
-                    torch.nn.Conv2d(kernel_size=1, in_channels=in_channels, out_channels=out_channels,stride = 2,padding = 0),
-                    # torch.nn.LeakyReLU(),
-                )
-        return block
     
     def post_bottleneck_block(self,in_channels, out_channels):
         block = torch.nn.Sequential(
@@ -63,7 +63,6 @@ class custom_AE0(nn.Module):
                     torch.nn.LeakyReLU(),
                 )
         return block
-    
     
     def final_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
@@ -75,7 +74,7 @@ class custom_AE0(nn.Module):
         return block
     
     def __init__(self, in_channel, out_channel):
-        super(custom_AE0, self).__init__()
+        super(custom_AE_KL, self).__init__()
         #Encode
         self.conv_encode1 = self.contracting_block(in_channels=in_channel, out_channels=32,kernel_size = 5)
         self.conv_encode2 = self.contracting_block(32,64,5)
@@ -83,10 +82,8 @@ class custom_AE0(nn.Module):
         self.conv_encode4 = self.contracting_block(128,128,5)
         # Bottleneck
         self.bottleneck_layer = self.bottleneck_block(128,16)
-        self.bottleneck_layer_2 = self.bottleneck_block_2(16,16)
         # Decode
-        self.post_bottleneck_layer = self.post_bottleneck_block(16,128)
-        self.conv_decode4 = self.expansive_block(128,128,5)
+        self.post_bottleneck_layer = self.post_bottleneck_block(8,128)
         self.conv_decode3 = self.expansive_block(128,128,5)
         self.conv_decode2 = self.expansive_block(128,64,5)
         self.conv_decode1 = self.expansive_block(64,32,5)
@@ -97,22 +94,25 @@ class custom_AE0(nn.Module):
         encode_block1 = self.conv_encode1(x)
         encode_block2 = self.conv_encode2(encode_block1)
         encode_block3 = self.conv_encode3(encode_block2)
-        encode_block4 = self.conv_encode4(encode_block3)        
+        encode_block4 = self.conv_encode4(encode_block3)
         # Bottleneck
         bt = self.bottleneck_layer(encode_block4)
-        bt_2 = self.bottleneck_layer_2(bt)
+        
+        #### reparametrize
+        bt_reprm = self.reparametrize(bt[:,:8], bt[:,8:])
+        
         # Decode
-        cat_layer5 = self.post_bottleneck_layer(bt_2)
-        cat_layer4 = self.conv_decode4(cat_layer5)
+        cat_layer4 = self.post_bottleneck_layer(bt_reprm)
         cat_layer3 = self.conv_decode3(cat_layer4)
         cat_layer2 = self.conv_decode2(cat_layer3)
         cat_layer1 = self.conv_decode1(cat_layer2)
         final_layer = self.final_layer(cat_layer1)
-        return final_layer,bt_2
+#         print(bt[:,:8].shape, bt[:,8:].shape)
+        return final_layer,bt,bt[:,:8], bt[:,8:]
+    
 
-
-########################################### Auto encoder 2 ########################################   
-class custom_AE1(nn.Module):
+    
+class custom_AE(nn.Module):
     def contracting_block(self, in_channels, out_channels, kernel_size):
         block = torch.nn.Sequential(
                     torch.nn.Conv2d(kernel_size=kernel_size, in_channels=in_channels, out_channels=out_channels,stride = 2,padding = 2),
@@ -153,7 +153,7 @@ class custom_AE1(nn.Module):
         return block
     
     def __init__(self, in_channel, out_channel):
-        super(custom_AE1, self).__init__()
+        super(custom_AE, self).__init__()
         #Encode
         self.conv_encode1 = self.contracting_block(in_channels=in_channel, out_channels=32,kernel_size = 5)
         self.conv_encode2 = self.contracting_block(32,64,5)
@@ -180,79 +180,6 @@ class custom_AE1(nn.Module):
         cat_layer4 = self.post_bottleneck_layer(bt)
         cat_layer3 = self.conv_decode3(cat_layer4)
         cat_layer2 = self.conv_decode2(cat_layer3)
-        cat_layer1 = self.conv_decode1(cat_layer2)
-        final_layer = self.final_layer(cat_layer1)
-        return final_layer,bt
-    
-########################################### Auto encoder 3 ########################################
-class custom_AE2(nn.Module):
-    def contracting_block(self, in_channels, out_channels, kernel_size):
-        block = torch.nn.Sequential(
-                    torch.nn.Conv2d(kernel_size=kernel_size, in_channels=in_channels, out_channels=out_channels,stride = 2,padding = 2),
-                    torch.nn.BatchNorm2d(out_channels),
-                    torch.nn.LeakyReLU(),
-                )
-        return block
-    
-    def expansive_block(self, in_channels, out_channels, kernel_size):
-        block = torch.nn.Sequential(
-                torch.nn.ConvTranspose2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=2, padding=2,output_padding = 1),
-                torch.nn.BatchNorm2d(out_channels),
-                torch.nn.LeakyReLU(),
-                )
-        return block
-    
-    def bottleneck_block(self,in_channels, out_channels):
-        block = torch.nn.Sequential(
-                    torch.nn.Conv2d(kernel_size=1, in_channels=in_channels, out_channels=out_channels,stride = 1,padding = 0),
-                    # torch.nn.LeakyReLU(),
-                )
-        return block
-    
-    def post_bottleneck_block(self,in_channels, out_channels):
-        block = torch.nn.Sequential(
-                    torch.nn.Conv2d(kernel_size=1, in_channels=in_channels, out_channels=out_channels,stride = 1,padding = 0),
-                    torch.nn.LeakyReLU(),
-                )
-        return block
-    
-    def final_block(self, in_channels, out_channels, kernel_size):
-        block = torch.nn.Sequential(
-                torch.nn.ConvTranspose2d(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size, stride=2, padding=2,output_padding = 1),
-                torch.nn.LeakyReLU(),
-                torch.nn.Conv2d(kernel_size=1, in_channels=in_channels, out_channels=out_channels),
-#                 torch.nn.Tanh()
-                )
-        return block
-    
-    def __init__(self, in_channel, out_channel):
-        super(custom_AE2, self).__init__()
-        #Encode
-        self.conv_encode1 = self.contracting_block(in_channels=in_channel, out_channels=32,kernel_size = 5)
-        self.conv_encode2 = self.contracting_block(32,64,5)
-        self.conv_encode3 = self.contracting_block(64,128,5)
-#         self.conv_encode4 = self.contracting_block(128,128,5)
-        # Bottleneck
-        self.bottleneck_layer = self.bottleneck_block(128,16)
-        # Decode
-        self.post_bottleneck_layer = self.post_bottleneck_block(16,128)
-#         self.conv_decode3 = self.expansive_block(128,128,5)
-        self.conv_decode2 = self.expansive_block(128,64,5)
-        self.conv_decode1 = self.expansive_block(64,32,5)
-        self.final_layer = self.final_block(32, out_channel,5)
-    
-    def forward(self, x):
-        # Encode
-        encode_block1 = self.conv_encode1(x)
-        encode_block2 = self.conv_encode2(encode_block1)
-        encode_block3 = self.conv_encode3(encode_block2)
-#         encode_block4 = self.conv_encode4(encode_block3)
-        # Bottleneck
-        bt = self.bottleneck_layer(encode_block3)
-        # Decode
-        cat_layer4 = self.post_bottleneck_layer(bt)
-#         cat_layer3 = self.conv_decode3(cat_layer4)
-        cat_layer2 = self.conv_decode2(cat_layer4)
         cat_layer1 = self.conv_decode1(cat_layer2)
         final_layer = self.final_layer(cat_layer1)
         return final_layer,bt
@@ -319,8 +246,9 @@ class model(nn.Module):
         I1_hat = H1_hat+self.upsampler(I2_hat)
 
         H0 = I0-self.upsampler(I1)
-        H0_hat,bt_0 = self.AE0(H0)
+        H0_hat,bt_0,mu,logvar= self.AE0(H0)
+#         print(mu.shape,logvar.shape)
         I0_hat = H0_hat+self.upsampler(I1_hat)
 
-        return I0_hat,I1_hat,I2_hat,H0_hat,H1_hat,I0,I1,I2,H0,H1,bt_2,bt_1,bt_0
+        return I0_hat,I1_hat,I2_hat,H0_hat,H1_hat,I0,I1,I2,H0,H1,bt_2,bt_1,bt_0,mu,logvar
 
